@@ -136,6 +136,21 @@
 
     <!-- DASHBOARD -->
     <section class="view" id="view-dash" data-view="dash" hidden>
+      <article class="card">
+        <h2 class="chart-title">Road to your goals</h2>
+        <p class="sub" id="journey-sub">Start at 0. Goal at the top right. Stay above the dashed line.</p>
+        <div class="chart" id="chart-journey"></div>
+        <p class="hint">Dashed line = on-track pace. Above it you're ahead, below it you're behind.</p>
+      </article>
+
+      <article class="card">
+        <h2 class="chart-title">Last 7 days</h2>
+        <div id="week-grid"></div>
+      </article>
+
+      <details class="more" id="more-details">
+        <summary>More details</summary>
+        <div class="more-body">
       <div class="kpis" id="kpis"></div>
 
       <article class="card">
@@ -175,6 +190,8 @@
         </div>
         <div class="chart" id="chart-pr"></div>
       </article>
+        </div>
+      </details>
     </section>
 
     <!-- JOURNAL -->

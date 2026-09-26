@@ -259,3 +259,22 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; color: var(-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Journey map + weekly ticks */
+.j-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.j-goal { font-size: 18px; }
+.week { display: grid; grid-template-columns: 64px repeat(7, 1fr); gap: 6px; align-items: center; }
+.week .wh { text-align: center; font-size: 11px; color: var(--muted); font-weight: 600; line-height: 1.2; }
+.week .wh.today { color: var(--ink); }
+.week .wl { font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+.box { aspect-ratio: 1; max-height: 40px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; font-size: 15px; }
+.box.hit { background: var(--good); color: #fff; }
+.box.miss { background: var(--bad); color: #fff; }
+.box.wait { background: transparent; border: 1.5px dashed var(--axis); color: var(--muted); }
+.week-legend { display: flex; gap: 14px; justify-content: flex-end; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+.week-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.more { margin-top: 2px; }
+.more > summary { cursor: pointer; text-align: center; color: var(--ink-2); font-weight: 650; font-size: 14px; padding: 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); list-style: none; }
+.more > summary::-webkit-details-marker { display: none; }
+.more[open] > summary { margin-bottom: 14px; }
+.more-body { display: flex; flex-direction: column; gap: 14px; }

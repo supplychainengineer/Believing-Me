@@ -483,6 +483,103 @@
     hover(el, f, n, x, pts.map((p) => `${fmtShort(p.date)} · ${p.val} ${esc(p.unit)}${flagged[p.id] === 'pr' ? ' · NEW PR ★' : ''}`), (i) => y(pts[i].val));
   }
 
+  const PILLARS = [
+    { id: 'picoq', name: 'Picoq', c: 'var(--picoq)', hit: (k) => (peek(k)?.notes.length || 0) > 0 },
+    { id: 'sleep', name: 'Sleep', c: 'var(--sleep)', hit: (k) => scores(k).sleep >= 1 },
+    { id: 'move', name: 'Move', c: 'var(--move)', hit: (k) => scores(k).move >= 1 },
+  ];
+
+  // One map: start at (0,0), goal at top-right. Dashed diagonal = on track.
+  // Picoq climbs with milestones done; Sleep and Move climb one step per day the goal is hit.
+  function chartJourney() {
+    const el = $('#chart-journey');
+    const { startDate, launchDate } = S();
+    const N = daysBetween(startDate, launchDate);
+    if (N <= 0) { el.innerHTML = '<p class="empty">Set a launch date after your start date in Goals.</p>'; return; }
+    const t = todayKey();
+    const done = Math.max(0, Math.min(N, daysBetween(startDate, t))); // full days before today
+    const ms = state.milestones;
+    const msPct = (k) => ms.length ? (ms.filter((m) => m.done && m.doneDate && m.doneDate <= k).length / ms.length) * 100 : 0;
+    const series = PILLARS.map((p) => {
+      const ys = [0];
+      let hits = 0;
+      for (let j = 1; j <= done; j++) {
+        const k = addDays(startDate, j - 1);
+        if (p.id === 'picoq') ys.push(msPct(k));
+        else { if (p.hit(k)) hits++; ys.push((hits / N) * 100); }
+      }
+      // today counts only once it's achieved, so the line never dips mid-day
+      const last = p.id === 'picoq' ? msPct(t) : ((hits + (done < N && p.hit(t) ? 1 : 0)) / N) * 100;
+      ys[ys.length - 1] = Math.max(ys[ys.length - 1], last);
+      return { ...p, ys };
+    });
+    const ideal = (j) => (j / N) * 100;
+
+    const w = Math.max(280, el.clientWidth || 320);
+    const f = { w, h: Math.round(Math.min(340, w * 0.85)), pad: { l: 14, r: 64, t: 30, b: 28 } };
+    f.iw = f.w - f.pad.l - f.pad.r; f.ih = f.h - f.pad.t - f.pad.b;
+    const x = (j) => f.pad.l + (j / N) * f.iw;
+    const y = (v) => f.pad.t + f.ih - (Math.min(100, v) / 100) * f.ih;
+
+    let s = svgOpen(f, 'Progress towards the three goals');
+    s += `<line class="grid-line" x1="${x(0)}" x2="${x(N)}" y1="${y(100)}" y2="${y(100)}"/>`;
+    s += `<line class="grid-line" x1="${x(N)}" x2="${x(N)}" y1="${y(0)}" y2="${y(100)}"/>`;
+    s += `<line class="axis-line" x1="${x(0)}" x2="${x(N)}" y1="${y(0)}" y2="${y(0)}"/>`;
+    s += `<line class="axis-line" x1="${x(0)}" x2="${x(0)}" y1="${y(0)}" y2="${y(100)}"/>`;
+    s += `<line class="target" x1="${x(0)}" y1="${y(0)}" x2="${x(N)}" y2="${y(100)}"/>`;
+    s += `<circle cx="${x(N)}" cy="${y(100)}" r="7" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>`;
+    s += `<text class="j-goal" x="${x(N) + 2}" y="${y(100) - 12}" text-anchor="middle">🏁</text>`;
+    s += `<text class="dlabel" x="${x(N) + 12}" y="${y(100) + 4}">Goal</text>`;
+    s += `<text class="dlabel" x="${x(0)}" y="${f.h - 8}">Start</text>`;
+    s += `<text class="dlabel" x="${x(N)}" y="${f.h - 8}" text-anchor="middle">Launch</text>`;
+    if (done > 0 && done < N) s += `<line class="crosshair" x1="${x(done)}" x2="${x(done)}" y1="${y(0)}" y2="${y(0) + 5}"/><text class="tick" x="${x(done)}" y="${f.h - 8}" text-anchor="middle">today</text>`;
+
+    for (const sr of series) {
+      s += `<path class="j-line" stroke="${sr.c}" d="${sr.ys.map((v, j) => `${j ? 'L' : 'M'}${x(j)},${y(v)}`).join('')}"/>`;
+    }
+    // end dots + direct labels, nudged apart so they never overlap
+    const ends = series.map((sr) => ({ sr, j: sr.ys.length - 1, v: sr.ys[sr.ys.length - 1] }))
+      .map((e) => ({ ...e, ly: y(e.v) })).sort((a, b) => a.ly - b.ly);
+    for (let i = 1; i < ends.length; i++) ends[i].ly = Math.max(ends[i].ly, ends[i - 1].ly + 14);
+    for (const e of ends) {
+      s += `<circle cx="${x(e.j)}" cy="${y(e.v)}" r="5" fill="${e.sr.c}" stroke="var(--surface)" stroke-width="2"/>`;
+      s += `<text class="dlabel" x="${x(e.j) + 9}" y="${e.ly + 4}">${e.sr.name}</text>`;
+    }
+    el.innerHTML = s + '</svg>';
+
+    const verdict = series.map((sr) => {
+      const j = sr.ys.length - 1, gap = sr.ys[j] - ideal(j);
+      const ok = gap >= -0.5;
+      return `<span style="white-space:nowrap"><span class="dot" style="background:${sr.c}"></span> ${sr.name} <b style="color:${ok ? 'var(--good)' : 'var(--bad)'}">${ok ? '▲ on track' : '▼ behind'}</b></span>`;
+    });
+    $('#journey-sub').innerHTML = verdict.join(' &nbsp; ');
+
+    const tips = Array.from({ length: N + 1 }, (_, j) => j <= done
+      ? `${j === 0 ? 'Start' : fmtShort(addDays(startDate, j - 1))} · ${series.map((sr) => `${sr.name} ${Math.round(sr.ys[j] ?? 0)}%`).join(' · ')} · pace ${Math.round(ideal(j))}%`
+      : null);
+    hover(el, f, N + 1, x, tips, (j) => y(Math.max(...series.map((sr) => sr.ys[j] ?? 0))));
+  }
+
+  function renderWeek() {
+    const keys = lastN(7), t = todayKey();
+    let h = '<div class="week"><span></span>';
+    for (const k of keys) {
+      const d = parseKey(k);
+      h += `<span class="wh ${k === t ? 'today' : ''}">${d.toLocaleDateString(undefined, { weekday: 'short' })}<br>${d.getDate()}</span>`;
+    }
+    for (const p of PILLARS) {
+      h += `<span class="wl" data-pillar="${p.id}"><span class="dot"></span>${p.name}</span>`;
+      for (const k of keys) {
+        const hit = p.hit(k);
+        const cls = hit ? 'hit' : (k === t || k < S().startDate) ? 'wait' : 'miss';
+        const label = hit ? 'done' : cls === 'wait' ? (k === t ? 'not yet' : 'before start') : 'missed';
+        h += `<span class="box ${cls}" title="${p.name} ${fmtShort(k)}: ${label}" aria-label="${p.name} ${fmtShort(k)}: ${label}">${hit ? '✓' : cls === 'miss' ? '✕' : ''}</span>`;
+      }
+    }
+    h += '</div><div class="week-legend"><span><i style="background:var(--good)"></i>Done</span><span><i style="background:var(--bad)"></i>Missed</span><span><i style="border:1.5px dashed var(--axis)"></i>Today, not yet</span></div>';
+    $('#week-grid').innerHTML = h;
+  }
+
   function renderKPIs() {
     const t = todayKey();
     const st = streak(), best = bestStreak();
@@ -505,6 +602,11 @@
   }
 
   function renderDash() {
+    chartJourney();
+    renderWeek();
+    if ($('#more-details').open) renderDetails();
+  }
+  function renderDetails() {
     renderKPIs();
     chartScore();
     chartHeat();
@@ -659,6 +761,7 @@
     mutate(() => { const d = day(current); d.prs = d.prs.filter((p) => p.id !== id); });
   });
   $('#pr-select').addEventListener('change', chartPR);
+  $('#more-details').addEventListener('toggle', (e) => e.target.open && renderDetails());
 
   $('#settings-form').addEventListener('submit', (e) => {
     e.preventDefault();
