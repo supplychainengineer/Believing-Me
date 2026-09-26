@@ -1,5 +1,5 @@
 // Network-first: always load the latest version when online, fall back to the cache when offline.
-const CACHE = 'believing-me-v3';
+const CACHE = 'believing-me-v4';
 const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

@@ -105,32 +105,32 @@
           <h2>1 hour of movement</h2>
           <span class="badge" id="move-badge">—</span>
         </header>
-        <div class="move-row">
-          <button type="button" class="step" data-min="-10">−10</button>
-          <div class="move-val"><input type="number" id="move-input" min="0" max="600" inputmode="numeric" /><span>min</span></div>
-          <button type="button" class="step" data-min="10">+10</button>
-        </div>
+        <div class="move-total"><b id="move-total">0</b><span id="move-target-label">/ 60 min today</span></div>
         <div class="progress"><span id="move-bar"></span></div>
-        <div class="chips" id="move-type">
-          <button type="button" data-t="Gym">🏋️ Gym</button>
-          <button type="button" data-t="Run">🏃 Run</button>
-          <button type="button" data-t="Walk">🚶 Walk</button>
-          <button type="button" data-t="Sport">⚽ Sport</button>
-          <button type="button" data-t="Yoga">🧘 Yoga</button>
-          <button type="button" data-t="Cycle">🚴 Cycle</button>
-        </div>
-        <h3 class="mini">Personal records</h3>
-        <form id="pr-form" class="pr-form">
-          <input id="pr-ex" list="pr-ex-list" type="text" autocomplete="off" placeholder="Exercise (e.g. Bench press)" required />
-          <datalist id="pr-ex-list"></datalist>
-          <input id="pr-val" type="number" step="any" inputmode="decimal" placeholder="Value" required />
-          <select id="pr-unit">
-            <option>kg</option><option>lb</option><option>reps</option><option>km</option><option>min</option><option>sec</option>
-          </select>
-          <button class="btn primary" type="submit">Add</button>
+        <ul class="log-list act-list" id="act-list"></ul>
+
+        <form id="act-form" class="act-form" autocomplete="off">
+          <h3 class="mini">Log an activity</h3>
+          <input id="act-name" type="text" list="act-names" placeholder="Activity (e.g. Bench press, Running, Badminton)" />
+          <datalist id="act-names"></datalist>
+          <div class="chips" id="act-quick"></div>
+
+          <div id="act-setup" hidden>
+            <p class="hint">What do you want to track for <b id="act-setup-name"></b>? Tap to choose. It's remembered for next time.</p>
+            <div class="chips" id="metric-chips"></div>
+            <details class="custom-metric">
+              <summary>+ Your own metric</summary>
+              <div class="cm-row">
+                <input id="cm-label" type="text" placeholder="Name (e.g. Jump height)" />
+                <input id="cm-unit" type="text" placeholder="Unit (e.g. cm)" />
+              </div>
+              <label class="inline"><input type="checkbox" id="cm-lower" /> lower is better (e.g. race time)</label>
+              <button type="button" class="btn" id="cm-add">Add metric</button>
+            </details>
+            <div class="metric-inputs" id="metric-inputs"></div>
+            <button class="btn primary wide" type="submit">Save activity</button>
+          </div>
         </form>
-        <p class="hint">For time-based records (e.g. 5 km run time in min), lower is better — tick <label class="inline"><input type="checkbox" id="pr-lower" /> lower wins</label></p>
-        <ul class="log-list" id="pr-list"></ul>
       </article>
     </section>
 

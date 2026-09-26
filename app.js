@@ -25,6 +25,22 @@
   const uid = () => Math.random().toString(36).slice(2, 10);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  // ---------- movement metrics ----------
+  const PRESETS = [
+    { id: 'weight', label: 'Weight', unit: 'kg' },
+    { id: 'reps', label: 'Reps', unit: 'reps' },
+    { id: 'sets', label: 'Sets', unit: 'sets' },
+    { id: 'distance', label: 'Distance', unit: 'km' },
+    { id: 'time', label: 'Time', unit: 'min' },
+    { id: 'pace', label: 'Pace', unit: 'min/km', lower: true },
+    { id: 'calories', label: 'Calories', unit: 'kcal' },
+    { id: 'steps', label: 'Steps', unit: 'steps' },
+  ];
+  const SUGGESTED = ['Gym', 'Running', 'Walking', 'Cycling', 'Yoga', 'Swimming', 'Badminton'];
+  const actKey = (n) => String(n).trim().toLowerCase();
+  const moveMin = (d) => (d?.acts || []).reduce((a, x) => a + (Number(x.minutes) || 0), 0);
+  const metricOf = (name, mid) => state.acts[actKey(name)]?.metrics.find((m) => m.id === mid) || PRESETS.find((m) => m.id === mid) || { id: mid, label: mid, unit: '' };
+
   // ---------- state ----------
   function defaults() {
     const t = todayKey();
@@ -34,6 +50,7 @@
         'Lock the MVP scope', 'Core features working', 'Landing page live', 'First 10 beta users',
         'Pricing & payments', 'Launch announcement ready', 'Picoq is LIVE 🚀',
       ].map((title) => ({ id: uid(), title, done: false, doneDate: null })),
+      acts: {},
       days: {},
     };
   }
@@ -43,16 +60,37 @@
       if (raw) {
         const s = JSON.parse(raw);
         const d = defaults();
-        return { settings: { ...d.settings, ...s.settings }, milestones: s.milestones || [], days: s.days || {} };
+        return migrate({ settings: { ...d.settings, ...s.settings }, milestones: s.milestones || [], acts: s.acts || {}, days: s.days || {} });
       }
     } catch (e) { /* storage unavailable or corrupt */ }
     return defaults();
+  }
+  // Older versions stored minutes + one PR list per day; turn them into activities with metrics.
+  function migrate(st) {
+    for (const d of Object.values(st.days)) {
+      if (Array.isArray(d.acts)) continue;
+      d.acts = [];
+      if (Number(d.move) > 0) {
+        const name = d.moveType || 'Workout';
+        st.acts[actKey(name)] ||= { name, metrics: [] };
+        d.acts.push({ id: uid(), name, minutes: Number(d.move), values: {} });
+      }
+      for (const p of d.prs || []) {
+        const tpl = (st.acts[actKey(p.ex)] ||= { name: p.ex.trim(), metrics: [] });
+        const preset = PRESETS.find((m) => m.unit === p.unit);
+        const mid = preset ? preset.id : 'u_' + p.unit;
+        if (!tpl.metrics.some((m) => m.id === mid)) tpl.metrics.push({ ...(preset || { id: mid, label: p.unit, unit: p.unit }), lower: !!p.lower });
+        d.acts.push({ id: p.id, name: p.ex.trim(), minutes: 0, values: { [mid]: p.val } });
+      }
+      delete d.move; delete d.moveType; delete d.prs;
+    }
+    return st;
   }
   let state = load();
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { toast('Could not save — storage is full or blocked'); }
   }
-  const day = (k) => (state.days[k] ||= { notes: [], bed: '', wake: '', move: 0, moveType: '', prs: [] });
+  const day = (k) => (state.days[k] ||= { notes: [], bed: '', wake: '', acts: [] });
   const peek = (k) => state.days[k];
 
   // ---------- scoring ----------
@@ -63,7 +101,7 @@
     if (!d) return { picoq: 0, sleep: 0, move: 0, total: 0, hits: 0 };
     const picoq = d.notes.length ? 1 : 0;
     const sleep = (onTime(d.bed, S().sleepTarget) ? 0.5 : 0) + (onTime(d.wake, S().wakeTarget) ? 0.5 : 0);
-    const move = Math.min((Number(d.move) || 0) / Number(S().moveTarget), 1);
+    const move = Math.min(moveMin(d) / Number(S().moveTarget), 1);
     const hits = (picoq >= 1) + (sleep >= 1) + (move >= 1);
     return { picoq, sleep, move, total: Math.round(((picoq + sleep + move) / 3) * 100), hits };
   }
@@ -89,27 +127,30 @@
     for (const k of Object.keys(state.days)) {
       const s = scores(k);
       total += s.total + (s.hits === 3 ? 50 : 0);
-      total += (state.days[k].prs || []).length * 15;
+      total += (state.days[k].acts || []).length * 10;
     }
     total += state.milestones.filter((m) => m.done).length * 150;
     return total;
   }
   const lvlReq = (n) => 150 * (n - 1) * (n - 1);
 
-  // PR detection: walk entries chronologically, flag entries that beat the previous best.
+  // PR detection: walk every activity metric chronologically; flag values that beat the previous best.
+  // flagged["<entryId>|<metricId>"] = 'first' | 'pr' | ''
   function prIndex() {
     const all = [];
     for (const k of Object.keys(state.days).sort()) {
-      for (const p of state.days[k].prs || []) all.push({ ...p, date: k });
+      for (const a of state.days[k].acts || []) {
+        for (const [mid, val] of Object.entries(a.values || {})) {
+          all.push({ date: k, entryId: a.id, name: a.name, mid, val, key: actKey(a.name) + '|' + mid, metric: metricOf(a.name, mid) });
+        }
+      }
     }
-    const best = {};
-    const flagged = {};
+    const best = {}, flagged = {};
     for (const p of all) {
-      const ex = p.ex.trim().toLowerCase() + '|' + p.unit;
-      const b = best[ex];
-      const better = b == null || (p.lower ? p.val < b : p.val > b);
-      flagged[p.id] = b == null ? 'first' : better ? 'pr' : '';
-      if (better) best[ex] = p.val;
+      const b = best[p.key];
+      const better = b == null || (p.metric.lower ? p.val < b : p.val > b);
+      flagged[p.entryId + '|' + p.mid] = b == null ? 'first' : better ? 'pr' : '';
+      if (better) best[p.key] = p.val;
     }
     return { all, flagged };
   }
@@ -167,7 +208,7 @@
   // ---------- render: today ----------
   function renderToday() {
     const k = current;
-    const d = peek(k) || { notes: [], bed: '', wake: '', move: 0, moveType: '', prs: [] };
+    const d = peek(k) || { notes: [], bed: '', wake: '', acts: [] };
     const sc = scores(k);
     const t = todayKey();
 
@@ -207,17 +248,66 @@
     setBadge('#sleep-badge', parts.length ? parts.join(' ') : 'Not yet', sc.sleep >= 1);
 
     // Move
-    if (document.activeElement !== $('#move-input')) $('#move-input').value = d.move || '';
+    const mins = moveMin(d);
+    $('#move-total').textContent = mins;
+    $('#move-target-label').textContent = `/ ${S().moveTarget} min today`;
     $('#move-bar').style.width = `${sc.move * 100}%`;
-    setBadge('#move-badge', d.move ? `${d.move}/${S().moveTarget} min` : 'Not yet', sc.move >= 1);
-    $$('#move-type button').forEach((b) => b.classList.toggle('on', b.dataset.t === d.moveType));
-
+    setBadge('#move-badge', mins ? `${mins}/${S().moveTarget} min` : 'Not yet', sc.move >= 1);
     const { flagged } = prIndex();
-    $('#pr-list').innerHTML = (d.prs || []).map((p) => `<li><span class="t">${esc(p.ex)} — <b>${p.val} ${esc(p.unit)}</b></span>
-      ${flagged[p.id] === 'pr' ? '<span class="pr-tag">NEW PR</span>' : flagged[p.id] === 'first' ? '<span class="meta">first log</span>' : ''}
-      <button class="x" data-del-pr="${p.id}" aria-label="Delete">×</button></li>`).join('');
-    const exs = [...new Set(prIndex().all.map((p) => p.ex.trim()))];
-    $('#pr-ex-list').innerHTML = exs.map((e) => `<option value="${esc(e)}">`).join('');
+    $('#act-list').innerHTML = (d.acts || []).map((a) => {
+      const vals = Object.entries(a.values || {}).map(([mid, v]) => {
+        const m = metricOf(a.name, mid), f = flagged[a.id + '|' + mid];
+        return `<span>${esc(m.label)} <b>${v}${m.unit && actKey(m.unit) !== actKey(m.label) ? ' ' + esc(m.unit) : ''}</b>${f === 'pr' ? ' <span class="pr-tag">PR</span>' : ''}</span>`;
+      }).join('');
+      return `<li><span class="t"><b>${esc(a.name)}</b></span><span class="meta">${a.minutes ? a.minutes + ' min' : ''}</span>
+        <button class="x" data-del-act="${a.id}" aria-label="Delete">×</button>${vals ? `<div class="vals">${vals}</div>` : ''}</li>`;
+    }).join('');
+    renderActQuick();
+  }
+
+  // ---------- activity form ----------
+  let draft = null; // { name, metrics: [...] } while choosing what to track
+  function recentActs() {
+    const seen = new Map();
+    for (const k of Object.keys(state.days).sort().reverse()) for (const a of [...(state.days[k].acts || [])].reverse()) {
+      const key = actKey(a.name); if (!seen.has(key)) seen.set(key, a.name);
+    }
+    for (const t of Object.values(state.acts)) if (!seen.has(actKey(t.name))) seen.set(actKey(t.name), t.name);
+    return [...seen.values()];
+  }
+  function renderActQuick() {
+    const names = recentActs();
+    const list = [...names, ...SUGGESTED.filter((n) => !names.some((x) => actKey(x) === actKey(n)))].slice(0, 8);
+    const cur = actKey($('#act-name').value);
+    $('#act-quick').innerHTML = list.map((n) => `<button type="button" data-act="${esc(n)}" class="${actKey(n) === cur && cur ? 'on' : ''}">${esc(n)}</button>`).join('');
+    $('#act-names').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
+  }
+  function openSetup(name) {
+    name = name.trim();
+    if (!name) { draft = null; $('#act-setup').hidden = true; renderActQuick(); return; }
+    const tpl = state.acts[actKey(name)];
+    if (!draft || actKey(draft.name) !== actKey(name)) draft = { name, metrics: tpl ? tpl.metrics.map((m) => ({ ...m })) : [], custom: [] };
+    else draft.name = name;
+    $('#act-setup').hidden = false;
+    $('#act-setup-name').textContent = name;
+    renderMetricChips();
+    renderActQuick();
+  }
+  function renderMetricChips() {
+    const tpl = state.acts[actKey(draft.name)];
+    const options = [...PRESETS];
+    for (const m of [...(tpl?.metrics || []), ...draft.custom, ...draft.metrics]) if (!options.some((o) => o.id === m.id)) options.push(m);
+    $('#metric-chips').innerHTML = options.map((m) => `<button type="button" data-metric="${esc(m.id)}" class="${draft.metrics.some((x) => x.id === m.id) ? 'on' : ''}">${esc(m.label)}${m.unit && actKey(m.unit) !== actKey(m.label) ? ` <small>${esc(m.unit)}</small>` : ''}</button>`).join('');
+    renderMetricInputs(options);
+  }
+  function renderMetricInputs() {
+    const box = $('#metric-inputs');
+    const keep = {};
+    $$('input', box).forEach((i) => (keep[i.dataset.mid] = i.value));
+    const field = (mid, label, unit, dir) => `<label class="field"><span>${esc(label)}${unit && actKey(unit) !== actKey(label) ? ` (${esc(unit)})` : ''}</span>
+      <input type="number" step="any" inputmode="decimal" min="0" data-mid="${esc(mid)}" value="${esc(keep[mid] ?? '')}" />${dir || ''}</label>`;
+    box.innerHTML = field('_minutes', 'Duration', 'min') + draft.metrics.map((m) =>
+      field(m.id, m.label, m.unit, `<button type="button" class="dir" data-dir="${esc(m.id)}" title="Tap to flip">${m.lower ? '↓ lower wins' : '↑ higher wins'}</button>`)).join('');
   }
   function setBadge(sel, text, done) {
     const el = $(sel);
@@ -419,7 +509,7 @@
     const el = $('#chart-move');
     const keys = lastN(30);
     const target = Number(S().moveTarget);
-    const vals = keys.map((k) => Number(peek(k)?.move) || 0);
+    const vals = keys.map((k) => moveMin(peek(k)));
     const hitDays = vals.slice(-7).filter((v) => v >= target).length;
     const week = vals.slice(-7).reduce((a, b) => a + b, 0);
     $('#move-sub').textContent = `This week: ${hitDays}/7 days hit ${target} min · ${Math.round(week / 60 * 10) / 10} h total`;
@@ -441,7 +531,7 @@
     s += `<line class="axis-line" x1="${f.pad.l}" x2="${f.w - f.pad.r}" y1="${y(0)}" y2="${y(0)}"/>`;
     s += xLabels(f, keys, x, 7) + '</svg>';
     el.innerHTML = s;
-    hover(el, f, keys.length, x, keys.map((k, i) => `${fmtShort(k)} · ${vals[i]} min${peek(k)?.moveType ? ' · ' + esc(peek(k).moveType) : ''}`), (i) => y(vals[i]));
+    hover(el, f, keys.length, x, keys.map((k, i) => `${fmtShort(k)} · ${vals[i]} min${peek(k)?.acts?.length ? ' · ' + esc(peek(k).acts.map((a) => a.name).join(', ')) : ''}`), (i) => y(vals[i]));
   }
 
   function chartPR() {
@@ -449,15 +539,15 @@
     const sel = $('#pr-select');
     const { all, flagged } = prIndex();
     const groups = {};
-    for (const p of all) (groups[p.ex.trim().toLowerCase() + '|' + p.unit] ||= []).push(p);
+    for (const p of all) (groups[p.key] ||= []).push(p);
     const ids = Object.keys(groups);
-    if (!ids.length) { sel.hidden = true; el.innerHTML = '<p class="empty">Log a lift, run or rep count on the Today tab to start tracking PRs.</p>'; return; }
+    if (!ids.length) { sel.hidden = true; el.innerHTML = '<p class="empty">Log an activity with a metric (weight, reps, distance…) on the Today tab to track PRs.</p>'; return; }
     sel.hidden = false;
     const prev = sel.value;
-    sel.innerHTML = ids.map((id) => `<option value="${esc(id)}">${esc(groups[id][0].ex.trim())} (${esc(groups[id][0].unit)})</option>`).join('');
+    sel.innerHTML = ids.map((id) => { const g = groups[id][0]; return `<option value="${esc(id)}">${esc(g.name)} · ${esc(g.metric.label)}${g.metric.unit ? ` (${esc(g.metric.unit)})` : ''}</option>`; }).join('');
     sel.value = ids.includes(prev) ? prev : ids[ids.length - 1];
     const pts = groups[sel.value];
-    const lower = pts.some((p) => p.lower);
+    const lower = !!pts[0].metric.lower;
     const vs = pts.map((p) => p.val);
     let lo = Math.min(...vs), hi = Math.max(...vs);
     const padv = (hi - lo) * 0.2 || Math.max(1, hi * 0.1);
@@ -470,17 +560,17 @@
     let s = svgOpen(f, 'PR progression') + yTicks(f, y, [lo, (lo + hi) / 2, hi], nice);
     s += `<path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.val)}`).join('')}" fill="none" stroke="var(--move)" stroke-width="2" stroke-linejoin="round"/>`;
     pts.forEach((p, i) => {
-      const pr = flagged[p.id] === 'pr' || flagged[p.id] === 'first';
+      const f = flagged[p.entryId + '|' + p.mid], pr = f === 'pr' || f === 'first';
       s += `<circle cx="${x(i)}" cy="${y(p.val)}" r="${pr ? 5.5 : 4}" fill="${pr ? 'var(--warn)' : 'var(--move)'}" stroke="var(--surface)" stroke-width="2"/>`;
     });
     const bestP = pts.reduce((b, p) => (lower ? p.val < b.val : p.val > b.val) ? p : b);
     const bi = pts.indexOf(bestP);
-    s += `<text class="dlabel" x="${x(bi)}" y="${y(bestP.val) - 10}" text-anchor="${bi === n - 1 && n > 1 ? 'end' : 'middle'}">best ${bestP.val} ${esc(bestP.unit)}</text>`;
+    s += `<text class="dlabel" x="${x(bi)}" y="${y(bestP.val) - 10}" text-anchor="${bi === n - 1 && n > 1 ? 'end' : 'middle'}">best ${bestP.val} ${esc(bestP.metric.unit)}</text>`;
     s += `<text class="tick" x="${x(0)}" y="${f.h - 8}" text-anchor="${n === 1 ? 'middle' : 'start'}">${fmtShort(pts[0].date)}</text>`;
     if (n > 1) s += `<text class="tick" x="${x(n - 1)}" y="${f.h - 8}" text-anchor="end">${fmtShort(pts[n - 1].date)}</text>`;
     s += '</svg>';
     el.innerHTML = s + `<p class="hint">★ Gold dots are personal records${lower ? ' (lower is better — chart is flipped so up = faster)' : ''}.</p>`;
-    hover(el, f, n, x, pts.map((p) => `${fmtShort(p.date)} · ${p.val} ${esc(p.unit)}${flagged[p.id] === 'pr' ? ' · NEW PR ★' : ''}`), (i) => y(pts[i].val));
+    hover(el, f, n, x, pts.map((p) => `${fmtShort(p.date)} · ${p.val} ${esc(p.metric.unit)}${flagged[p.entryId + '|' + p.mid] === 'pr' ? ' · NEW PR ★' : ''}`), (i) => y(pts[i].val));
   }
 
   const PILLARS = [
@@ -598,7 +688,7 @@
       kpi('Picoq', left >= 0 ? `${left}d` : 'Live?', `to launch · ${pStreak}-day work streak`, '', 'picoq') +
       kpi('Sleep', `${sStreak}d`, 'on-time streak', '', 'sleep') +
       kpi('Move', `${mStreak}d`, `${S().moveTarget}-min streak`, '', 'move') +
-      kpi('Records', prIndex().all.filter((p) => prIndex().flagged[p.id] === 'pr').length, 'PRs broken so far', '', 'move');
+      kpi('Records', (() => { const { all, flagged } = prIndex(); return all.filter((p) => flagged[p.entryId + '|' + p.mid] === 'pr').length; })(), 'PRs broken so far', '', 'move');
   }
 
   function renderDash() {
@@ -734,31 +824,62 @@
     mutate(() => (day(current)[b.dataset.now] = v));
   }));
 
-  const setMove = (v) => mutate(() => (day(current).move = Math.max(0, Math.min(600, Math.round(v) || 0))));
-  $('#move-input').addEventListener('change', (e) => setMove(Number(e.target.value)));
-  $$('.step').forEach((b) => b.addEventListener('click', () => setMove((Number(peek(current)?.move) || 0) + Number(b.dataset.min))));
-  $('#move-type').addEventListener('click', (e) => {
+  $('#act-name').addEventListener('input', (e) => openSetup(e.target.value));
+  $('#act-quick').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    mutate(() => { const d = day(current); d.moveType = d.moveType === b.dataset.t ? '' : b.dataset.t; });
+    $('#act-name').value = b.dataset.act;
+    openSetup(b.dataset.act);
   });
-
-  $('#pr-form').addEventListener('submit', (e) => {
+  $('#metric-chips').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b || !draft) return;
+    const id = b.dataset.metric;
+    const i = draft.metrics.findIndex((m) => m.id === id);
+    if (i >= 0) draft.metrics.splice(i, 1);
+    else {
+      const tpl = state.acts[actKey(draft.name)];
+      const m = [...(tpl?.metrics || []), ...draft.custom, ...PRESETS].find((x) => x.id === id);
+      if (m) draft.metrics.push({ ...m, lower: !!m.lower });
+    }
+    renderMetricChips();
+  });
+  $('#metric-inputs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dir]'); if (!b || !draft) return;
     e.preventDefault();
-    const ex = $('#pr-ex').value.trim(), val = Number($('#pr-val').value), unit = $('#pr-unit').value, lower = $('#pr-lower').checked;
-    if (!ex || !Number.isFinite(val)) return;
+    const m = draft.metrics.find((x) => x.id === b.dataset.dir); if (m) m.lower = !m.lower;
+    renderMetricInputs();
+  });
+  $('#cm-add').addEventListener('click', () => {
+    const label = $('#cm-label').value.trim(), unit = $('#cm-unit').value.trim();
+    if (!label || !draft) return toast('Give your metric a name');
+    const m = { id: 'c_' + uid(), label, unit, lower: $('#cm-lower').checked };
+    draft.custom.push(m); draft.metrics.push(m);
+    $('#cm-label').value = ''; $('#cm-unit').value = ''; $('#cm-lower').checked = false;
+    $('.custom-metric').open = false;
+    renderMetricChips();
+  });
+  $('#act-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('#act-name').value.trim();
+    if (!name || !draft) return;
+    const read = (mid) => { const i = $(`#metric-inputs input[data-mid="${CSS.escape(mid)}"]`); const v = i && i.value !== '' ? Number(i.value) : NaN; return Number.isFinite(v) ? v : null; };
+    const minutes = Math.max(0, Math.min(600, Math.round(read('_minutes') || 0)));
+    const values = {};
+    for (const m of draft.metrics) { const v = read(m.id); if (v != null) values[m.id] = v; }
+    if (!minutes && !Object.keys(values).length) return toast('Add the duration or at least one metric');
     const id = uid();
-    mutate(() => day(current).prs.push({ id, ex, val, unit, lower }));
-    if (prIndex().flagged[id] === 'pr') { confetti(); toast(`NEW PR — ${ex}: ${val} ${unit}! 🏆`); }
-    $('#pr-val').value = '';
+    mutate(() => {
+      state.acts[actKey(name)] = { name, metrics: draft.metrics.map(({ id, label, unit, lower }) => ({ id, label, unit, lower: !!lower })) };
+      day(current).acts.push({ id, name, minutes, values });
+    });
+    const { flagged } = prIndex();
+    const prs = Object.keys(values).filter((mid) => flagged[id + '|' + mid] === 'pr');
+    if (prs.length) { confetti(); toast(`NEW PR — ${name}: ${prs.map((mid) => { const m = metricOf(name, mid); return `${values[mid]} ${m.unit}`; }).join(', ')} 🏆`); }
+    $('#act-name').value = ''; draft = null; $('#act-setup').hidden = true; $('#metric-inputs').innerHTML = '';
+    renderActQuick();
   });
-  $('#pr-ex').addEventListener('change', () => {
-    // remember unit / direction from the last entry of this exercise
-    const last = prIndex().all.filter((p) => p.ex.trim().toLowerCase() === $('#pr-ex').value.trim().toLowerCase()).pop();
-    if (last) { $('#pr-unit').value = last.unit; $('#pr-lower').checked = !!last.lower; }
-  });
-  $('#pr-list').addEventListener('click', (e) => {
-    const id = e.target.dataset.delPr; if (!id) return;
-    mutate(() => { const d = day(current); d.prs = d.prs.filter((p) => p.id !== id); });
+  $('#act-list').addEventListener('click', (e) => {
+    const id = e.target.dataset.delAct; if (!id) return;
+    mutate(() => { const d = day(current); d.acts = d.acts.filter((a) => a.id !== id); });
   });
   $('#pr-select').addEventListener('change', chartPR);
   $('#more-details').addEventListener('toggle', (e) => e.target.open && renderDetails());
@@ -785,7 +906,7 @@
       const s = JSON.parse(await file.text());
       if (!s.days || !s.settings) throw new Error('bad file');
       if (!confirm('Replace everything on this device with this backup?')) return;
-      state = { settings: { ...defaults().settings, ...s.settings }, milestones: s.milestones || [], days: s.days };
+      state = migrate({ settings: { ...defaults().settings, ...s.settings }, milestones: s.milestones || [], acts: s.acts || {}, days: s.days });
       save(); render(); toast('Backup restored');
     } catch { toast('That file is not a Believing Me backup'); }
     e.target.value = '';

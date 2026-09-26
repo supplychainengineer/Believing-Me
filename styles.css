@@ -278,3 +278,21 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; color: var(-
 .more > summary::-webkit-details-marker { display: none; }
 .more[open] > summary { margin-bottom: 14px; }
 .more-body { display: flex; flex-direction: column; gap: 14px; }
+
+/* Activities with custom metrics */
+.move-total { display: flex; align-items: baseline; gap: 6px; margin: 10px 0 8px; }
+.move-total b { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+.move-total span { color: var(--muted); font-weight: 600; }
+.act-list li { flex-wrap: wrap; }
+.act-list .vals { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px 10px; color: var(--ink-2); font-size: 13px; }
+.act-list .vals b { color: var(--ink); }
+.act-form { margin-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.act-form .mini { margin-top: 12px; margin-bottom: 0; }
+#act-setup { display: flex; flex-direction: column; gap: 10px; }
+#act-setup .hint { margin: 0; }
+#metric-chips { margin-top: 0; }
+.custom-metric summary { cursor: pointer; color: var(--c); font-weight: 650; font-size: 13.5px; }
+.custom-metric[open] { display: flex; flex-direction: column; gap: 8px; }
+.cm-row { display: grid; grid-template-columns: 1fr 110px; gap: 8px; margin-top: 8px; }
+.metric-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dir { align-self: flex-start; background: none; border: 0; padding: 2px 0; font-size: 12px; font-weight: 650; cursor: pointer; color: var(--muted); }
