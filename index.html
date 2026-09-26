@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Believing Me</title>
+  <meta name="description" content="Daily tracker for launching Picoq, a steady sleep rhythm and one hour of movement." />
+  <meta name="theme-color" content="#0f0f14" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Believing Me" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow" id="today-label">Today</p>
+      <h1 id="greeting">Believing Me</h1>
+    </div>
+    <div class="level" id="level-chip" aria-label="Level">
+      <span class="level-num" id="level-num">Lv 1</span>
+      <span class="level-bar"><span id="level-fill"></span></span>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- TODAY -->
+    <section class="view" id="view-today" data-view="today">
+      <div class="hero card">
+        <div class="rings" id="today-rings"></div>
+        <div class="hero-side">
+          <div class="hero-score"><span id="today-score">0</span><small>/100</small></div>
+          <p class="hero-msg" id="today-msg">Let's make today count.</p>
+          <div class="streak" id="streak-chip"><span class="flame">🔥</span><b id="streak-num">0</b> day streak</div>
+        </div>
+      </div>
+
+      <div class="date-nav">
+        <button class="icon-btn" id="prev-day" aria-label="Previous day">‹</button>
+        <button class="date-pill" id="date-pill">Today</button>
+        <button class="icon-btn" id="next-day" aria-label="Next day">›</button>
+      </div>
+
+      <!-- Picoq -->
+      <article class="card pillar" data-pillar="picoq">
+        <header class="pillar-head">
+          <span class="dot"></span>
+          <h2>Launch Picoq</h2>
+          <span class="badge" id="picoq-badge">—</span>
+        </header>
+        <p class="sub" id="launch-countdown"></p>
+        <form id="picoq-form" class="row">
+          <input id="picoq-input" type="text" autocomplete="off" placeholder="What did you move forward today?" />
+          <button class="btn primary" type="submit">Log</button>
+        </form>
+        <div class="chips" id="picoq-quick">
+          <button type="button" data-q="Built a feature">🛠 Built</button>
+          <button type="button" data-q="Talked to a user">🗣 User talk</button>
+          <button type="button" data-q="Marketing / content">📣 Marketing</button>
+          <button type="button" data-q="Fixed bugs">🐞 Fixes</button>
+          <button type="button" data-q="Planning / strategy">🧭 Planning</button>
+        </div>
+        <ul class="log-list" id="picoq-list"></ul>
+        <details class="milestones">
+          <summary>Launch milestones <span id="ms-count"></span></summary>
+          <ul id="ms-list"></ul>
+          <form id="ms-form" class="row">
+            <input id="ms-input" type="text" autocomplete="off" placeholder="Add a milestone (e.g. Landing page live)" />
+            <button class="btn" type="submit">Add</button>
+          </form>
+        </details>
+      </article>
+
+      <!-- Sleep -->
+      <article class="card pillar" data-pillar="sleep">
+        <header class="pillar-head">
+          <span class="dot"></span>
+          <h2>Sleep rhythm</h2>
+          <span class="badge" id="sleep-badge">—</span>
+        </header>
+        <p class="sub" id="sleep-target-label"></p>
+        <div class="grid2">
+          <label class="field">
+            <span>🌙 Slept last night</span>
+            <input type="time" id="bed-input" />
+            <button type="button" class="link" data-now="bed">Use now</button>
+          </label>
+          <label class="field">
+            <span>☀️ Woke up</span>
+            <input type="time" id="wake-input" />
+            <button type="button" class="link" data-now="wake">Use now</button>
+          </label>
+        </div>
+      </article>
+
+      <!-- Move -->
+      <article class="card pillar" data-pillar="move">
+        <header class="pillar-head">
+          <span class="dot"></span>
+          <h2>1 hour of movement</h2>
+          <span class="badge" id="move-badge">—</span>
+        </header>
+        <div class="move-row">
+          <button type="button" class="step" data-min="-10">−10</button>
+          <div class="move-val"><input type="number" id="move-input" min="0" max="600" inputmode="numeric" /><span>min</span></div>
+          <button type="button" class="step" data-min="10">+10</button>
+        </div>
+        <div class="progress"><span id="move-bar"></span></div>
+        <div class="chips" id="move-type">
+          <button type="button" data-t="Gym">🏋️ Gym</button>
+          <button type="button" data-t="Run">🏃 Run</button>
+          <button type="button" data-t="Walk">🚶 Walk</button>
+          <button type="button" data-t="Sport">⚽ Sport</button>
+          <button type="button" data-t="Yoga">🧘 Yoga</button>
+          <button type="button" data-t="Cycle">🚴 Cycle</button>
+        </div>
+        <h3 class="mini">Personal records</h3>
+        <form id="pr-form" class="pr-form">
+          <input id="pr-ex" list="pr-ex-list" type="text" autocomplete="off" placeholder="Exercise (e.g. Bench press)" required />
+          <datalist id="pr-ex-list"></datalist>
+          <input id="pr-val" type="number" step="any" inputmode="decimal" placeholder="Value" required />
+          <select id="pr-unit">
+            <option>kg</option><option>lb</option><option>reps</option><option>km</option><option>min</option><option>sec</option>
+          </select>
+          <button class="btn primary" type="submit">Add</button>
+        </form>
+        <p class="hint">For time-based records (e.g. 5 km run time in min), lower is better — tick <label class="inline"><input type="checkbox" id="pr-lower" /> lower wins</label></p>
+        <ul class="log-list" id="pr-list"></ul>
+      </article>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="view" id="view-dash" data-view="dash" hidden>
+      <div class="kpis" id="kpis"></div>
+
+      <article class="card">
+        <h2 class="chart-title">Daily score — last 30 days</h2>
+        <p class="sub">Bars are each day's score. The line is your 7‑day momentum.</p>
+        <div class="chart" id="chart-score"></div>
+      </article>
+
+      <article class="card">
+        <h2 class="chart-title">Consistency map</h2>
+        <p class="sub">Last 16 weeks. Darker = more of the three goals hit.</p>
+        <div class="heatmap-wrap" id="chart-heat"></div>
+      </article>
+
+      <article class="card" data-pillar="picoq">
+        <h2 class="chart-title"><span class="dot"></span>Picoq launch pace</h2>
+        <p class="sub" id="pace-sub"></p>
+        <div class="chart" id="chart-launch"></div>
+      </article>
+
+      <article class="card" data-pillar="sleep">
+        <h2 class="chart-title"><span class="dot"></span>Wake-up vs target</h2>
+        <p class="sub" id="wake-sub"></p>
+        <div class="chart" id="chart-wake"></div>
+        <h2 class="chart-title spaced"><span class="dot"></span>Bedtime vs target</h2>
+        <p class="sub" id="bed-sub"></p>
+        <div class="chart" id="chart-bed"></div>
+      </article>
+
+      <article class="card" data-pillar="move">
+        <h2 class="chart-title"><span class="dot"></span>Movement minutes</h2>
+        <p class="sub" id="move-sub"></p>
+        <div class="chart" id="chart-move"></div>
+        <div class="pr-head">
+          <h2 class="chart-title spaced"><span class="dot"></span>PR progression</h2>
+          <select id="pr-select" aria-label="Exercise"></select>
+        </div>
+        <div class="chart" id="chart-pr"></div>
+      </article>
+    </section>
+
+    <!-- JOURNAL -->
+    <section class="view" id="view-journal" data-view="journal" hidden>
+      <article class="card">
+        <h2>Picoq journal</h2>
+        <p class="sub">Everything you did to get closer to launch.</p>
+        <div id="journal"></div>
+      </article>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings" data-view="settings" hidden>
+      <form class="card settings" id="settings-form">
+        <h2>Your goals</h2>
+        <label class="field"><span>Your name</span><input name="name" type="text" /></label>
+        <div class="grid2">
+          <label class="field"><span>Journey start</span><input name="startDate" type="date" /></label>
+          <label class="field"><span>Picoq launch date</span><input name="launchDate" type="date" /></label>
+        </div>
+        <div class="grid2">
+          <label class="field"><span>Target bedtime</span><input name="sleepTarget" type="time" /></label>
+          <label class="field"><span>Target wake-up</span><input name="wakeTarget" type="time" /></label>
+        </div>
+        <div class="grid2">
+          <label class="field"><span>On-time window (± min)</span><input name="tolerance" type="number" min="5" max="120" /></label>
+          <label class="field"><span>Daily movement (min)</span><input name="moveTarget" type="number" min="10" max="300" /></label>
+        </div>
+        <button class="btn primary wide" type="submit">Save goals</button>
+      </form>
+
+      <div class="card settings">
+        <h2>Backup</h2>
+        <p class="sub">Your data lives only on this phone. Export a backup now and then.</p>
+        <div class="row">
+          <button class="btn" id="export-btn" type="button">Export backup</button>
+          <label class="btn" for="import-file">Import backup</label>
+          <input type="file" id="import-file" accept="application/json" hidden />
+        </div>
+        <button class="btn danger wide" id="reset-btn" type="button">Erase all data</button>
+      </div>
+
+      <div class="card settings">
+        <h2>Put it on your home screen</h2>
+        <p class="sub"><b>iPhone:</b> open in Safari → Share → <i>Add to Home Screen</i>.<br />
+          <b>Android:</b> open in Chrome → ⋮ menu → <i>Install app</i>.</p>
+        <button class="btn wide" id="install-btn" type="button" hidden>Install app</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <button data-tab="today" class="active"><span>◎</span>Today</button>
+    <button data-tab="dash"><span>▦</span>Progress</button>
+    <button data-tab="journal"><span>✎</span>Journal</button>
+    <button data-tab="settings"><span>⚙</span>Goals</button>
+  </nav>
+
+  <div class="tooltip" id="tooltip" role="status" hidden></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <script src="app.js"></script>
+</body>
+</html>
