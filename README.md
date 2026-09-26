@@ -12,7 +12,7 @@ Each goal fills a ring. When you close all three you get confetti. The app also 
 
 It's a Progressive Web App (plain HTML/CSS/JS, no build step, works offline).
 
-1. Host it: push to `main` and enable **Settings → Pages → Source: GitHub Actions**. The included workflow then deploys it to `https://<user>.github.io/<repo>/`.
+1. Host it (one time): on GitHub go to **Settings → Pages**, set **Source: Deploy from a branch**, pick branch `claude/friendly-fermi-2ukv88` and folder `/ (root)`, then **Save**. After about a minute it's live at https://supplychainengineer.github.io/Believing-Me/ and every push updates it.
 2. Open that URL on your phone:
    - **iPhone**: Safari → Share → *Add to Home Screen*
    - **Android**: Chrome → ⋮ → *Install app*
