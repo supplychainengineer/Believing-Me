@@ -296,3 +296,13 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; color: var(-
 .cm-row { display: grid; grid-template-columns: 1fr 110px; gap: 8px; margin-top: 8px; }
 .metric-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .dir { align-self: flex-start; background: none; border: 0; padding: 2px 0; font-size: 12px; font-weight: 650; cursor: pointer; color: var(--muted); }
+
+.act-chips button { font-size: 14px; padding: 8px 12px; }
+#ex-box { display: flex; flex-direction: column; gap: 8px; }
+#ex-box .hint { margin: 0; }
+#ex-rows { display: flex; flex-direction: column; gap: 6px; }
+.ex-row { display: grid; grid-template-columns: 1fr 64px 28px; gap: 6px; align-items: center; }
+.ex-row.kg { grid-template-columns: 1fr 64px 64px 28px; }
+.ex-row input { min-height: 42px; padding: 8px 10px; }
+.ex-row .x { background: none; border: 0; color: var(--muted); font-size: 20px; cursor: pointer; }
+#ex-add { align-self: flex-start; min-height: 38px; font-size: 14px; }

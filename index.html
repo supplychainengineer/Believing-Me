@@ -111,11 +111,18 @@
 
         <form id="act-form" class="act-form" autocomplete="off">
           <h3 class="mini">Log an activity</h3>
-          <input id="act-name" type="text" list="act-names" placeholder="Activity (e.g. Bench press, Running, Badminton)" />
+          <div class="chips act-chips" id="act-quick"></div>
+          <input id="act-name" type="text" list="act-names" placeholder="Other activity name" hidden />
           <datalist id="act-names"></datalist>
-          <div class="chips" id="act-quick"></div>
 
           <div id="act-setup" hidden>
+            <div id="ex-box" hidden>
+              <p class="hint">Add each exercise you did. Last session's exercises are filled in for you.</p>
+              <div id="ex-rows"></div>
+              <datalist id="ex-names"></datalist>
+              <button type="button" class="btn" id="ex-add">+ Add exercise</button>
+            </div>
+            <div id="metric-pick">
             <p class="hint">What do you want to track for <b id="act-setup-name"></b>? Tap to choose. It's remembered for next time.</p>
             <div class="chips" id="metric-chips"></div>
             <details class="custom-metric">
@@ -127,6 +134,7 @@
               <label class="inline"><input type="checkbox" id="cm-lower" /> lower is better (e.g. race time)</label>
               <button type="button" class="btn" id="cm-add">Add metric</button>
             </details>
+            </div>
             <div class="metric-inputs" id="metric-inputs"></div>
             <button class="btn primary wide" type="submit">Save activity</button>
           </div>

@@ -36,7 +36,16 @@
     { id: 'calories', label: 'Calories', unit: 'kcal' },
     { id: 'steps', label: 'Steps', unit: 'steps' },
   ];
-  const SUGGESTED = ['Gym', 'Running', 'Walking', 'Cycling', 'Yoga', 'Swimming', 'Badminton'];
+  // Your activities. Strength and Stretch are logged as a list of exercises with reps.
+  const MY_ACTS = [
+    { name: 'Football', icon: '⚽', metrics: [] },
+    { name: 'Running', icon: '🏃', metrics: [{ id: 'distance', label: 'Distance', unit: 'km' }, { id: 'time', label: 'Time', unit: 'min' }] },
+    { name: 'Strength', icon: '🏋️', exercises: true, weight: true },
+    { name: 'Stretch', icon: '🤸', exercises: true },
+    { name: 'Skipping', icon: '🪢', metrics: [{ id: 'skips', label: 'Skips', unit: '' }] },
+    { name: 'Yoga', icon: '🧘', metrics: [] },
+  ];
+  const actDef = (n) => MY_ACTS.find((a) => a.name.toLowerCase() === String(n).trim().toLowerCase());
   const actKey = (n) => String(n).trim().toLowerCase();
   const moveMin = (d) => (d?.acts || []).reduce((a, x) => a + (Number(x.minutes) || 0), 0);
   const metricOf = (name, mid) => state.acts[actKey(name)]?.metrics.find((m) => m.id === mid) || PRESETS.find((m) => m.id === mid) || { id: mid, label: mid, unit: '' };
@@ -142,6 +151,13 @@
       for (const a of state.days[k].acts || []) {
         for (const [mid, val] of Object.entries(a.values || {})) {
           all.push({ date: k, entryId: a.id, name: a.name, mid, val, key: actKey(a.name) + '|' + mid, metric: metricOf(a.name, mid) });
+        }
+        for (const ex of a.exercises || []) {
+          for (const [field, word, unit] of [['reps', 'reps', ''], ['kg', 'weight', 'kg']]) {
+            if (ex[field] == null) continue;
+            const mid = `ex:${actKey(ex.name)}:${field}`;
+            all.push({ date: k, entryId: a.id, name: a.name, mid, val: ex[field], key: actKey(a.name) + '|' + mid, metric: { label: `${ex.name} ${word}`, unit } });
+          }
         }
       }
     }
@@ -258,6 +274,9 @@
       const vals = Object.entries(a.values || {}).map(([mid, v]) => {
         const m = metricOf(a.name, mid), f = flagged[a.id + '|' + mid];
         return `<span>${esc(m.label)} <b>${v}${m.unit && actKey(m.unit) !== actKey(m.label) ? ' ' + esc(m.unit) : ''}</b>${f === 'pr' ? ' <span class="pr-tag">PR</span>' : ''}</span>`;
+      }).join('') + (a.exercises || []).map((ex) => {
+        const pr = ['reps', 'kg'].some((fld) => flagged[`${a.id}|ex:${actKey(ex.name)}:${fld}`] === 'pr');
+        return `<span>${esc(ex.name)} <b>${ex.reps != null ? ex.reps + ' reps' : ''}${ex.kg != null ? `${ex.reps != null ? ' × ' : ''}${ex.kg} kg` : ''}</b>${pr ? ' <span class="pr-tag">PR</span>' : ''}</span>`;
       }).join('');
       return `<li><span class="t"><b>${esc(a.name)}</b></span><span class="meta">${a.minutes ? a.minutes + ' min' : ''}</span>
         <button class="x" data-del-act="${a.id}" aria-label="Delete">×</button>${vals ? `<div class="vals">${vals}</div>` : ''}</li>`;
@@ -277,19 +296,52 @@
   }
   function renderActQuick() {
     const names = recentActs();
-    const list = [...names, ...SUGGESTED.filter((n) => !names.some((x) => actKey(x) === actKey(n)))].slice(0, 8);
-    const cur = actKey($('#act-name').value);
-    $('#act-quick').innerHTML = list.map((n) => `<button type="button" data-act="${esc(n)}" class="${actKey(n) === cur && cur ? 'on' : ''}">${esc(n)}</button>`).join('');
+    const others = names.filter((n) => !actDef(n)).slice(0, 3);
+    const cur = draft ? actKey(draft.name) : '';
+    const otherOpen = !$('#act-name').hidden;
+    $('#act-quick').innerHTML =
+      MY_ACTS.map((a) => `<button type="button" data-act="${esc(a.name)}" class="${actKey(a.name) === cur ? 'on' : ''}">${a.icon} ${esc(a.name)}</button>`).join('') +
+      others.map((n) => `<button type="button" data-act="${esc(n)}" class="${actKey(n) === cur ? 'on' : ''}">${esc(n)}</button>`).join('') +
+      `<button type="button" data-other="1" class="${otherOpen ? 'on' : ''}">＋ Other</button>`;
     $('#act-names').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
+  }
+  const lastExercises = (name) => {
+    for (const k of Object.keys(state.days).sort().reverse()) {
+      if (k > current) continue;
+      const a = [...(state.days[k].acts || [])].reverse().find((x) => actKey(x.name) === actKey(name) && x.exercises?.length);
+      if (a) return a.exercises;
+    }
+    return [];
+  };
+  function exRow(withKg, ex = {}) {
+    return `<div class="ex-row ${withKg ? 'kg' : ''}">
+      <input class="ex-name" type="text" list="ex-names" placeholder="Exercise" value="${esc(ex.name || '')}" />
+      <input class="ex-reps" type="number" inputmode="numeric" min="0" placeholder="${ex.reps != null ? esc(ex.reps) : 'Reps'}" />
+      ${withKg ? `<input class="ex-kg" type="number" inputmode="decimal" step="any" min="0" placeholder="${ex.kg != null ? esc(ex.kg) + ' kg' : 'kg'}" />` : ''}
+      <button type="button" class="x ex-del" aria-label="Remove">×</button></div>`;
+  }
+  function renderExBox(name) {
+    const def = actDef(name);
+    const prev = lastExercises(name);
+    $('#ex-rows').innerHTML = (prev.length ? prev : [{}]).map((ex) => exRow(def.weight, ex)).join('');
+    const names = new Set();
+    for (const d of Object.values(state.days)) for (const a of d.acts || []) if (actKey(a.name) === actKey(name)) for (const ex of a.exercises || []) names.add(ex.name);
+    $('#ex-names').innerHTML = [...names].map((n) => `<option value="${esc(n)}">`).join('');
   }
   function openSetup(name) {
     name = name.trim();
     if (!name) { draft = null; $('#act-setup').hidden = true; renderActQuick(); return; }
     const tpl = state.acts[actKey(name)];
-    if (!draft || actKey(draft.name) !== actKey(name)) draft = { name, metrics: tpl ? tpl.metrics.map((m) => ({ ...m })) : [], custom: [] };
+    const def = actDef(name);
+    const fresh = !draft || actKey(draft.name) !== actKey(name);
+    if (fresh) draft = { name, metrics: (tpl ? tpl.metrics : def?.metrics || []).map((m) => ({ ...m })), custom: [] };
     else draft.name = name;
+    const exMode = !!def?.exercises;
     $('#act-setup').hidden = false;
+    $('#ex-box').hidden = !exMode;
+    $('#metric-pick').hidden = exMode;
     $('#act-setup-name').textContent = name;
+    if (exMode && fresh) { draft.metrics = []; renderExBox(name); }
     renderMetricChips();
     renderActQuick();
   }
@@ -827,8 +879,22 @@
   $('#act-name').addEventListener('input', (e) => openSetup(e.target.value));
   $('#act-quick').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.other) {
+      $('#act-name').hidden = false; $('#act-name').value = ''; draft = null; $('#act-setup').hidden = true;
+      renderActQuick(); $('#act-name').focus(); return;
+    }
+    $('#act-name').hidden = true;
     $('#act-name').value = b.dataset.act;
     openSetup(b.dataset.act);
+  });
+  $('#ex-add').addEventListener('click', () => {
+    $('#ex-rows').insertAdjacentHTML('beforeend', exRow(!!actDef(draft?.name || '')?.weight));
+    $$('#ex-rows .ex-name').pop().focus();
+  });
+  $('#ex-rows').addEventListener('click', (e) => {
+    if (!e.target.classList.contains('ex-del')) return;
+    e.target.closest('.ex-row').remove();
+    if (!$('#ex-rows .ex-row')) $('#ex-add').click();
   });
   $('#metric-chips').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b || !draft) return;
@@ -865,16 +931,24 @@
     const minutes = Math.max(0, Math.min(600, Math.round(read('_minutes') || 0)));
     const values = {};
     for (const m of draft.metrics) { const v = read(m.id); if (v != null) values[m.id] = v; }
-    if (!minutes && !Object.keys(values).length) return toast('Add the duration or at least one metric');
+    const num = (i) => (i && i.value !== '' && Number.isFinite(Number(i.value)) ? Number(i.value) : null);
+    const exercises = actDef(name)?.exercises ? $$('#ex-rows .ex-row').map((r) => ({
+      name: $('.ex-name', r).value.trim(), reps: num($('.ex-reps', r)), kg: num($('.ex-kg', r)),
+    })).filter((x) => x.name && (x.reps != null || x.kg != null)) : [];
+    if (!minutes && !Object.keys(values).length && !exercises.length) return toast('Add the duration or at least one exercise / metric');
     const id = uid();
     mutate(() => {
       state.acts[actKey(name)] = { name, metrics: draft.metrics.map(({ id, label, unit, lower }) => ({ id, label, unit, lower: !!lower })) };
-      day(current).acts.push({ id, name, minutes, values });
+      day(current).acts.push(exercises.length ? { id, name, minutes, values, exercises } : { id, name, minutes, values });
     });
     const { flagged } = prIndex();
-    const prs = Object.keys(values).filter((mid) => flagged[id + '|' + mid] === 'pr');
-    if (prs.length) { confetti(); toast(`NEW PR — ${name}: ${prs.map((mid) => { const m = metricOf(name, mid); return `${values[mid]} ${m.unit}`; }).join(', ')} 🏆`); }
-    $('#act-name').value = ''; draft = null; $('#act-setup').hidden = true; $('#metric-inputs').innerHTML = '';
+    const prs = Object.keys(values).filter((mid) => flagged[id + '|' + mid] === 'pr').map((mid) => `${values[mid]} ${metricOf(name, mid).unit}`.trim());
+    for (const ex of exercises) {
+      if (flagged[`${id}|ex:${actKey(ex.name)}:reps`] === 'pr') prs.push(`${ex.name} ${ex.reps} reps`);
+      if (flagged[`${id}|ex:${actKey(ex.name)}:kg`] === 'pr') prs.push(`${ex.name} ${ex.kg} kg`);
+    }
+    if (prs.length) { confetti(); toast(`NEW PR — ${name}: ${prs.join(', ')} 🏆`); }
+    $('#act-name').value = ''; $('#act-name').hidden = true; $('#ex-rows').innerHTML = ''; draft = null; $('#act-setup').hidden = true; $('#metric-inputs').innerHTML = '';
     renderActQuick();
   });
   $('#act-list').addEventListener('click', (e) => {
